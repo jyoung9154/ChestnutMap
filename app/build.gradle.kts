@@ -14,8 +14,8 @@ if(localPropertiesFile.exists()) {
 }
 
 val naverMapClientId: String = checkNotNull(
-    localProperties.getProperty("NAVERMAP_CLIENT_KEY")
-) { "NAVERMAP_CLIENT_KEY is missing in local.properties" }
+    localProperties.getProperty("NAVERMAP_CLIENT_ID")
+) { "NAVERMAP_CLIENT_ID is missing in local.properties" }
 
 android {
     namespace = "com.bamtori.chestnutmap"
@@ -32,8 +32,8 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
-        buildConfigField("String", "NAVERMAP_CLIENT_KEY", "\"$naverMapClientId\"")
-        manifestPlaceholders["NAVERMAP_CLIENT_KEY"] = naverMapClientId
+        buildConfigField("String", "NAVERMAP_CLIENT_ID", "\"$naverMapClientId\"")
+        manifestPlaceholders["NAVERMAP_CLIENT_ID"] = naverMapClientId
     }
 
     buildTypes {
