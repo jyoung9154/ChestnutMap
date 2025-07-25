@@ -1,6 +1,10 @@
 package com.bamtori.chestnutmap.ui.navigation
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -44,7 +48,10 @@ fun AppNavigation() {
         }
         // 메인 화면 정의
         composable("main") {
-            MainScreen()
+            Box(modifier = Modifier.navigationBarsPadding().fillMaxSize()) {
+                MainScreen()
+            }
         }
+
     }
 }

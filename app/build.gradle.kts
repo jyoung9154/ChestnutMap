@@ -96,6 +96,10 @@ dependencies {
     implementation("io.github.fornewid:naver-map-compose:1.8.2")
     implementation("com.naver.maps:map-sdk:3.22.0")
 
+    // 네비게이션 시스템 바 숨기기/보이기 (Android 11 이상)
+    implementation("com.google.accompanist:accompanist-systemuicontroller:0.33.2-alpha")
+    implementation("com.google.android.gms:play-services-location:21.0.1")
+
     // Test
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")

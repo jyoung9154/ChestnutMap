@@ -1,11 +1,13 @@
 package com.bamtori.chestnutmap
 
+import android.content.pm.ActivityInfo
 import android.os.Bundle
 import android.content.pm.PackageManager
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -43,10 +45,7 @@ class MainActivity : ComponentActivity() {
             // 추가 대응: 에러 전용 화면 노출, 종료 등 비즈니스에 맞게 분기처리
         }
 
-        // 3. (필요하다면) 클라이언트 ID를 코드에서 직접 세팅 - 일반적으로는 Manifest 권장
-        // NaverMapSdk.getInstance(this).setClient(NaverMapSdk.NcpKeyClient("여기에_키값"))
-
-        // 4. Compose 기반 UI 셋업
+        // Compose 기반 UI 셋업
         setContent {
             ChestnutMapTheme {
                 Surface(
