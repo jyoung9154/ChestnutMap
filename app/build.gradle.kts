@@ -1,21 +1,26 @@
+// 앱 모듈/app/build.gradle.kts
+
 import java.util.Properties
 import java.io.FileInputStream
 
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
+    id("org.jetbrains.kotlin.android") // 버전은 루트에서 상속
     id("com.google.gms.google-services")
+    id("com.google.android.libraries.mapsplatform.secrets-gradle-plugin")
+    id("org.jetbrains.kotlin.plugin.compose") version "2.1.0"
 }
 
+// local.properties에서 API 키 읽기
 val localProperties = Properties()
 val localPropertiesFile = rootProject.file("local.properties")
-if(localPropertiesFile.exists()) {
+if (localPropertiesFile.exists()) {
     localProperties.load(FileInputStream(localPropertiesFile))
 }
 
-val naverMapClientId: String = checkNotNull(
-    localProperties.getProperty("NAVERMAP_CLIENT_ID")
-) { "NAVERMAP_CLIENT_ID is missing in local.properties" }
+val googleMapKey: String = checkNotNull(localProperties.getProperty("GOOGLE_MAP_KEY")) {
+    "GOOGLE_MAP_KEY is missing in local.properties"
+}
 
 android {
     namespace = "com.bamtori.chestnutmap"
@@ -29,11 +34,10 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        vectorDrawables {
-            useSupportLibrary = true
-        }
-        buildConfigField("String", "NAVERMAP_CLIENT_ID", "\"$naverMapClientId\"")
-        manifestPlaceholders["NAVERMAP_CLIENT_ID"] = naverMapClientId
+        vectorDrawables.useSupportLibrary = true
+
+        // API 키를 매니페스트 placeholders 로 전달
+        manifestPlaceholders["GOOGLE_MAP_KEY"] = googleMapKey
     }
 
     buildTypes {
@@ -45,30 +49,38 @@ android {
             )
         }
     }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+
     kotlinOptions {
         jvmTarget = "17"
     }
+
     buildFeatures {
         compose = true
         buildConfig = true
+        viewBinding = true
     }
+
     composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.11"
+        kotlinCompilerExtensionVersion = "1.5.11" // Compose 컴파일러 확장 최신 버전
     }
+
     packaging {
         resources {
-            excludes += "/META-INF/{AL2.0,LGPL2.1}"
+            excludes += "/META-INF/{AL2.0,LGPL2.1}" // 중복 라이선스 제거
         }
     }
 }
 
 dependencies {
-
+    // Compose BOM으로 버전 통합 관리
     implementation(platform("androidx.compose:compose-bom:2025.07.00"))
+
+    // Compose UI 및 코어 라이브러리
     implementation("androidx.activity:activity-compose:1.8.2")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
@@ -78,11 +90,16 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
     implementation("androidx.navigation:navigation-compose:2.7.7")
-
-    implementation("androidx.datastore:datastore-preferences:1.0.0")
     implementation("androidx.compose.material:material-icons-extended")
+    implementation("androidx.datastore:datastore-preferences:1.0.0")
 
-    // Firebase
+    // Google Maps 및 Places
+    implementation("com.google.android.gms:play-services-maps:19.2.0")
+    implementation("com.google.maps.android:maps-compose:2.11.4")
+    implementation("com.google.android.gms:play-services-places:17.0.0")
+    implementation("com.google.android.libraries.places:places:4.4.1")
+
+    // Firebase BOM으로 버전 일괄 관리
     implementation(platform("com.google.firebase:firebase-bom:32.8.0"))
     implementation("com.google.firebase:firebase-auth")
     implementation("com.google.firebase:firebase-firestore")
@@ -90,22 +107,41 @@ dependencies {
     implementation("com.google.firebase:firebase-storage")
     implementation("com.google.firebase:firebase-messaging")
 
+    // Google Play Services (인증, 위치)
     implementation("com.google.android.gms:play-services-auth:21.0.0")
-
-    // Naver Map
-    implementation("io.github.fornewid:naver-map-compose:1.8.2")
-    implementation("com.naver.maps:map-sdk:3.22.0")
-
-    // 네비게이션 시스템 바 숨기기/보이기 (Android 11 이상)
-    implementation("com.google.accompanist:accompanist-systemuicontroller:0.33.2-alpha")
     implementation("com.google.android.gms:play-services-location:21.0.1")
 
-    // Test
+    // System UI 조작 라이브러리
+    implementation("com.google.accompanist:accompanist-systemuicontroller:0.33.2-alpha")
+
+    // 네트워크 & 직렬화
+    implementation("com.squareup.retrofit2:retrofit:2.9.0")
+    implementation("com.squareup.retrofit2:converter-moshi:2.9.0")
+    implementation("com.squareup.retrofit2:converter-scalars:2.9.0")
+    implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
+
+    implementation("com.squareup.moshi:moshi:1.14.0")
+    implementation("com.squareup.moshi:moshi-kotlin:1.14.0")
+    implementation("com.squareup.moshi:moshi-kotlin-codegen:1.14.0")
+
+    // 이미지 로딩
+    implementation("io.coil-kt:coil-compose:2.2.2")
+
+    // Kotlin 코루틴
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+
+    // 미디어, UI
+    implementation("androidx.media3:media3-common-ktx:1.7.1")
+    implementation("androidx.appcompat:appcompat:1.7.0")
+    implementation("androidx.constraintlayout:constraintlayout:2.1.4")
+
+    // 테스트
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
-    androidTestImplementation(platform("androidx.compose:compose-bom:2023.08.00"))
+    androidTestImplementation(platform("androidx.compose:compose-bom:2025.07.00"))
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 }

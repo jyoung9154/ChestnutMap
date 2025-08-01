@@ -1,3 +1,5 @@
+// 프로젝트 루트/settings.gradle.kts
+
 pluginManagement {
     repositories {
         google()
@@ -5,13 +7,15 @@ pluginManagement {
         gradlePluginPortal()
     }
 }
+
 dependencyResolutionManagement {
+    // 리포지토리를 한 곳에서만 관리하고 프로젝트별 선언 금지
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
         google()
         mavenCentral()
-        maven("https://repository.map.naver.com/archive/maven")
     }
 }
+
 rootProject.name = "ChestnutMap"
 include(":app")
