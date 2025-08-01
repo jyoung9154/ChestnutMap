@@ -3,7 +3,6 @@ package com.bamtori.chestnutmap.ui.map
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.bamtori.chestnutmap.data.map.MapRepository
-import com.bamtori.chestnutmap.data.map.MarkerRepository
 import com.bamtori.chestnutmap.data.model.Map
 import com.bamtori.chestnutmap.data.model.Marker
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -16,7 +15,7 @@ import kotlinx.coroutines.launch
  * [MapRepository]와 [MarkerRepository]를 통해 지도 및 마커 데이터를 관리합니다.
  * 현재 선택된 지도 ID와 마커 추가 위치를 상태로 노출합니다.
  */
-class MapViewModel(private val mapRepository: MapRepository, private val markerRepository: MarkerRepository) : ViewModel() {
+class MapViewModel(private val mapRepository: MapRepository) : ViewModel() {
 
     // 앱에 존재하는 지도 목록을 나타내는 StateFlow
     private val _maps = MutableStateFlow<List<Map>>(emptyList())
@@ -45,7 +44,6 @@ class MapViewModel(private val mapRepository: MapRepository, private val markerR
      */
     fun setCurrentMapId(mapId: String) {
         _currentMapId.value = mapId
-        fetchMarkersForMap(mapId)
     }
 
     /**
@@ -91,49 +89,6 @@ class MapViewModel(private val mapRepository: MapRepository, private val markerR
     fun deleteMap(mapId: String) {
         viewModelScope.launch {
             mapRepository.deleteMap(mapId)
-        }
-    }
-
-    /**
-     * 특정 지도의 마커 목록을 가져옵니다.
-     * @param mapId 마커를 가져올 지도의 ID
-     */
-    fun fetchMarkersForMap(mapId: String) {
-        viewModelScope.launch {
-            markerRepository.getMarkersForMap(mapId).collectLatest {
-                _markers.value = it
-            }
-        }
-    }
-
-    /**
-     * 마커를 저장합니다. 새로운 마커인 경우 생성하고, 기존 마커인 경우 업데이트합니다.
-     * @param marker 저장할 마커 객체
-     */
-    fun saveMarker(marker: Marker) {
-        viewModelScope.launch {
-            if (marker.markerId.isEmpty()) { // 새로운 마커인 경우
-                val newMarker = marker.copy(
-                    markerId = java.util.UUID.randomUUID().toString(),
-                    mapId = _currentMapId.value ?: "", // 현재 맵 ID 사용
-                    lat = _markerAddLocation.value?.first ?: 0.0,
-                    lng = _markerAddLocation.value?.second ?: 0.0
-                )
-                markerRepository.createMarker(newMarker)
-            } else { // 기존 마커를 수정하는 경우
-                markerRepository.updateMarker(marker)
-            }
-            clearMarkerAddLocation() // 마커 추가 위치 초기화
-        }
-    }
-
-    /**
-     * 특정 마커를 삭제합니다.
-     * @param markerId 삭제할 마커의 ID
-     */
-    fun deleteMarker(markerId: String) {
-        viewModelScope.launch {
-            markerRepository.deleteMarker(markerId)
         }
     }
 }

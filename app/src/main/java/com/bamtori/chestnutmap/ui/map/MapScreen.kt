@@ -1,21 +1,26 @@
 package com.bamtori.chestnutmap.ui.map
 
-import androidx.compose.foundation.background
+import android.util.Log
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material3.*
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.bamtori.chestnutmap.data.map.MapRepository
-import com.bamtori.chestnutmap.data.map.MarkerRepository
-import com.bamtori.chestnutmap.data.model.Marker
-import com.naver.maps.geometry.LatLng
-import com.naver.maps.map.CameraPosition
-import com.naver.maps.map.compose.*
+import com.google.maps.android.compose.GoogleMap
+import kotlinx.coroutines.launch
+import com.google.android.gms.maps.model.CameraPosition as GoogleCameraPosition
+import com.google.android.gms.maps.model.LatLng as GoogleLatLng
+import com.google.android.gms.maps.model.*
+import com.google.android.libraries.places.api.Places
+import com.google.android.libraries.places.api.model.Place
+import com.google.android.libraries.places.api.net.FetchPlaceRequest
+import com.google.maps.android.compose.MapUiSettings
+import com.google.maps.android.compose.MapProperties
+
 
 /**
  * /app/src/main/java/com/bamtori/chestnutmap/ui/map/MapScreen.kt
@@ -24,26 +29,15 @@ import com.naver.maps.map.compose.*
  * - 지도 주요 제스처(이동/확대/축소/회전 등), 내 위치 버튼, ± 버튼, 마커 추가/수정
  * - 초보자를 위한 상세 한글 주석 포함
  */
-@OptIn(ExperimentalNaverMapApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MapScreen(
     mapViewModel: MapViewModel = viewModel(
         factory = MapViewModelFactory(
-            MapRepository(),
-            MarkerRepository()
+            MapRepository()
         )
     )
 ) {
-
-    val topInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-
-    // 1. 내 위치 소스 생성 (현재 Compose 공식 방식, 직접 new 금지)
-    val locationSource = rememberFusedLocationSource()
-
-    // 2. (옵션) 지도 마커 등 상태값 StateFlow 연동
-    val markers by mapViewModel.markers.collectAsState()
-    var showMarkerEditDialog by remember { mutableStateOf(false) } // 마커 추가/수정 다이얼로그 표시용
-    var selectedMarker by remember { mutableStateOf<Marker?>(null) } // 선택된 마커
     val currentMapId by mapViewModel.currentMapId.collectAsState()
 
     // 처음 진입 시 더미 맵 ID 할당 (테스트/개발시용)
@@ -53,50 +47,97 @@ fun MapScreen(
         }
     }
 
-    // 3. 지도 UI 컨트롤 옵션 (네이버 지도앱 기본과 최대한 일치)
-    val mapUiSettings = remember {
-        MapUiSettings(
-            isZoomControlEnabled = false,         // 우측 하단 ± 버튼 표시 (기본 false)
-            isCompassEnabled = true,             // 나침반(북쪽) 아이콘 표시
-            isScaleBarEnabled = true,            // 거리 축척바 표시
-            isScrollGesturesEnabled = true,      // 지도 드래그(이동) 허용
-            isZoomGesturesEnabled = true,        // 핀치/더블탭 확대축소 허용
-            isTiltGesturesEnabled = true,        // 기울이기(Tilt) 허용
-            isRotateGesturesEnabled = true,      // 회전 허용
-            isLocationButtonEnabled = true,      // 내 위치 버튼(동그라미) 활성화
-            isIndoorLevelPickerEnabled = true,   // 실내 층수면 층 UI 보임
-            isLogoClickEnabled = false           // 네이버 로고 클릭 비활성
-        )
-    }
-    val mapProperties = remember { MapProperties() }
-    val cameraPositionState = rememberCameraPositionState {
-        // 지도 시작 시 카메라 위치: 서울 광화문
-        position = CameraPosition(LatLng(37.5665, 126.9780), 10.0)
-    }
+    val context = LocalContext.current
 
-    Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
-        // 4. 실제 네이버 지도 화면
-        NaverMap(
+    val scope = rememberCoroutineScope()
+    val sheetState = rememberModalBottomSheetState()
+    var selectedLatLng by remember { mutableStateOf<GoogleLatLng?>(null) }
+    var selectedPoi by remember { mutableStateOf<PointOfInterest?>(null) }
+    var selectedPlace by remember { mutableStateOf<Place?>(null) }
+    val placesClient = remember { Places.createClient(context) }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        //구글 지도
+        val googleCameraPositionState = com.google.maps.android.compose.rememberCameraPositionState() {
+            position = GoogleCameraPosition(GoogleLatLng(37.5665, 126.9780), 10f, 0f, 0f)
+        }
+        GoogleMap(
             modifier = Modifier.fillMaxSize(),
-            cameraPositionState = cameraPositionState,
-            properties = mapProperties,
-            uiSettings = mapUiSettings,
-            locationSource = locationSource, // 내 위치 기능 활성화(파란 점 + 하단 버튼)
-            contentPadding = PaddingValues(0.dp)
+            cameraPositionState = googleCameraPositionState,
+            uiSettings = MapUiSettings(
+                compassEnabled = true,
+                myLocationButtonEnabled = true,
+                zoomControlsEnabled = false,
+                indoorLevelPickerEnabled = true,
+                tiltGesturesEnabled = true,
+                rotationGesturesEnabled = true,
+                scrollGesturesEnabled = true,
+                zoomGesturesEnabled = true,
+            ),
+            properties = MapProperties(
+                isMyLocationEnabled = true
+            ),
+            onMapClick = { latLng ->
+                Log.d("MapClick", "Clicked location: ${latLng.latitude}, ${latLng.longitude}")
+            },
+            onMapLongClick = { latLng ->
+                Log.d("MapClick", "Clicked location: ${latLng.latitude}, ${latLng.longitude}")
+                selectedLatLng = GoogleLatLng(latLng.latitude, latLng.longitude)
+                scope.launch { sheetState.show() }
+            },
+            onPOIClick = { poi ->
+                // Place.Field: 원하는 상세 필드 추가
+                val placeFields = listOf(
+                    Place.Field.ID,
+                    Place.Field.NAME,
+                    Place.Field.ADDRESS,
+                    Place.Field.PHONE_NUMBER,
+                    Place.Field.RATING,
+                    Place.Field.WEBSITE_URI,
+                    Place.Field.TYPES,
+                    Place.Field.PHOTO_METADATAS,
+                    Place.Field.USER_RATINGS_TOTAL
+                )
+                val request = FetchPlaceRequest.newInstance(poi.placeId, placeFields)
+                placesClient.fetchPlace(request)
+                    .addOnSuccessListener { response ->
+                        selectedPlace = response.place
+                        // 필요시 바텀시트 자동 show
+                        scope.launch { sheetState.show() }
+                    }
+                    .addOnFailureListener { exception ->  Log.e("MapScreen", "Place not found.", exception) }
+            },
         ) {
-            // 5. 마커 표시 (Firestore 연동시 실시간 리스트 가능)
-//            markers.forEach { marker ->
-//                Marker(
-//                    state = rememberMarkerState(position = LatLng(marker.lat, marker.lng)),
-//                    captionText = marker.title,
-//                    onClick = {
-//                        // 마커 클릭 시 → 수정 다이얼로그 오픈
-//                        selectedMarker = marker
-//                        showMarkerEditDialog = true
-//                        true // 이벤트 소비
-//                    }
-//                )
-//            }
+            // 필요시 마커 등 추가
+        }
+
+
+        // ② 바텀시트 표출
+        if (selectedLatLng != null) {
+            GooglePlaceBottomSheet(
+                latLng = selectedLatLng!!,
+                sheetState = sheetState,
+                onDismiss = {
+                    selectedLatLng = null
+                    scope.launch { sheetState.hide() }
+                }
+            )
+
+        }
+
+        if (selectedPlace != null) {
+//            PlaceDetailsBottomSheet(place = selectedPlace)
+            ModalBottomSheet(
+                sheetState = sheetState,
+                onDismissRequest = {
+                    selectedPlace = null
+                    scope.launch { sheetState.hide() }
+                }
+            ) {
+//                Log.d("MapScreen", "selectedPlace: $selectedPlace")
+                PlaceDetailsBottomSheet(place = selectedPlace, placesClient = placesClient)
+            }
         }
     }
 }
+
