@@ -177,6 +177,8 @@ private fun PlacePhoto(place: Place?, placesClient: PlacesClient?) {
             isLoading = false
         }
     }
+    // 이미지 없고 로딩도 아니면(즉 사진 자체가 없으면) 아예 그리지 않음!
+    if (imageBitmap == null && !isLoading) return
 
     Box(
         modifier = Modifier.fillMaxWidth().height(180.dp).clip(RoundedCornerShape(12.dp)).background(Color.LightGray),
@@ -193,12 +195,12 @@ private fun PlacePhoto(place: Place?, placesClient: PlacesClient?) {
                 )
             }
             else -> {
-                Icon(
-                    imageVector = Icons.Default.PhotoCamera,
-                    contentDescription = "사진 없음",
-                    tint = Color.Gray,
-                    modifier = Modifier.size(48.dp)
-                )
+//                Icon(
+//                    imageVector = Icons.Default.PhotoCamera,
+//                    contentDescription = "사진 없음",
+//                    tint = Color.Gray,
+//                    modifier = Modifier.size(48.dp)
+//                )
             }
         }
     }
