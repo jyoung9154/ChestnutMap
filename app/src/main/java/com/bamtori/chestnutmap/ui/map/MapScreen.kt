@@ -71,51 +71,41 @@ import kotlinx.coroutines.flow.*
 @Composable
 fun MapScreen(
     mapViewModel: MapViewModel = viewModel(
-        factory = MapViewModelFactory(
-            MapRepository()
-        )
+        factory = MapViewModelFactory(MapRepository())
     )
 ) {
-    // 현재 선택된 지도의 ID를 State로 관리합니다.
+    // 현재 지도 선택 ID 및 초기값
     val currentMapId by mapViewModel.currentMapId.collectAsState()
-
-    // 컴포저블이 처음 로드될 때 테스트용 맵 ID를 설정합니다.
     LaunchedEffect(Unit) {
         if (currentMapId == null) {
             mapViewModel.setCurrentMapId("dummy_map_id_for_testing")
         }
     }
 
-    // 현재 컨텍스트를 가져옵니다.
     val context = LocalContext.current
-
-    // 코루틴 스코프를 생성하여 비동기 작업을 관리합니다.
     val scope = rememberCoroutineScope()
-    // 바텀시트의 상태를 관리합니다.
     val sheetState = rememberModalBottomSheetState()
-    // 지도에서 길게 클릭하여 선택된 위치(위도, 경도)를 저장하는 State.
-    var selectedLatLng by remember { mutableStateOf<GoogleLatLng?>(null) }
-    // 선택된 장소(POI)의 상세 정보를 저장하는 State.
+
+    // 지도에서 선택된 위치/장소 상태
     var selectedPlace by remember { mutableStateOf<Place?>(null) }
-    // Google Places API 클라이언트를 초기화합니다.
     val placesClient = remember { Places.createClient(context) }
 
-    // --- 검색 관련 State ---
-    // 검색창의 현재 텍스트를 저장하는 State.
+    // 검색 관련 state
     var searchQuery by remember { mutableStateOf("") }
-    // 검색창이 활성화 상태인지 여부를 저장하는 State.
     var isSearchActive by remember { mutableStateOf(false) }
-    // 장소 검색 자동완성 결과를 저장하는 State.
     var searchResults by remember { mutableStateOf<List<AutocompletePrediction>>(emptyList()) }
 
-    // 지도의 카메라 위치 상태를 관리합니다. (초기 위치: 서울)
+    // Google Map 상태 (초기 위치 서울)
     val googleCameraPositionState = com.google.maps.android.compose.rememberCameraPositionState {
-        position = GoogleCameraPosition(GoogleLatLng(37.5665, 126.9780), 10f, 0f, 0f)
+        position = com.google.android.gms.maps.model.CameraPosition(
+            com.google.android.gms.maps.model.LatLng(37.5665, 126.9780), 10f, 0f, 0f
+        )
     }
-    // 1.5초후 자동 검색
+
+    // 검색 입력시 자동완성 (debounce)
     LaunchedEffect(searchQuery) {
         snapshotFlow { searchQuery }
-            .debounce(1500)
+            .debounce(1000)
             .filter { it.isNotBlank() }
             .collectLatest { query ->
                 doSearch(
@@ -127,190 +117,156 @@ fun MapScreen(
             }
     }
 
-    // 전체 화면을 차지하는 Box 컨테이너.
     Box(modifier = Modifier.fillMaxSize()) {
-
-        // GoogleMap Composable: 지도를 화면에 렌더링합니다.
+        // Google 지도 표시
         GoogleMap(
             modifier = Modifier.fillMaxSize(),
-            cameraPositionState = googleCameraPositionState, // 지도 카메라 위치 상태
-            // 지도 UI 관련 설정
+            cameraPositionState = googleCameraPositionState,
             uiSettings = MapUiSettings(
-                compassEnabled = true,               // 나침반 활성화
-                myLocationButtonEnabled = true,    // 내 위치 버튼 활성화
-                zoomControlsEnabled = false,         // 확대/축소 컨트롤 비활성화 (제스처로만 가능)
-                indoorLevelPickerEnabled = true,   // 실내 지도 레벨 피커 활성화
-                tiltGesturesEnabled = true,        // 기울이기 제스처 활성화
-                rotationGesturesEnabled = true,    // 회전 제스처 활성화
-                scrollGesturesEnabled = true,      // 스크롤 제스처 활성화
-                zoomGesturesEnabled = true,        // 줌 제스처 활성화
+                compassEnabled = true,
+                myLocationButtonEnabled = true,
+                zoomControlsEnabled = false,
+                indoorLevelPickerEnabled = true,
+                tiltGesturesEnabled = true,
+                rotationGesturesEnabled = true,
+                scrollGesturesEnabled = true,
+                zoomGesturesEnabled = true,
             ),
-            // 지도 속성 설정
-            properties = MapProperties(
-                isMyLocationEnabled = true // 내 위치 표시 활성화
-            ),
-            // 지도를 클릭했을 때의 이벤트 리스너
-            onMapClick = { latLng ->
-                Log.d("MapClick", "Clicked location: ${latLng.latitude}, ${latLng.longitude}")
-            },
-            // 지도를 길게 클릭했을 때의 이벤트 리스너 (바텀시트 표시)
-            onMapLongClick = { latLng ->
-                Log.d("MapClick", "Long-clicked location: ${latLng.latitude}, ${latLng.longitude}")
-                selectedLatLng = latLng
-                scope.launch { sheetState.show() } // 바텀시트 열기
-            },
-            // POI(관심 장소)를 클릭했을 때의 이벤트 리스너
+            properties = MapProperties(isMyLocationEnabled = true),
+            // POI 클릭시 상세 조회 후 바텀시트 띄움
             onPOIClick = { poi ->
-                // 가져올 장소의 상세 정보 필드를 지정합니다.
                 val placeFields = listOf(
                     Place.Field.ID, Place.Field.NAME, Place.Field.ADDRESS, Place.Field.PHONE_NUMBER,
                     Place.Field.RATING, Place.Field.WEBSITE_URI, Place.Field.TYPES,
-                    Place.Field.PHOTO_METADATAS, Place.Field.USER_RATINGS_TOTAL
+                    Place.Field.PHOTO_METADATAS, Place.Field.USER_RATINGS_TOTAL,Place.Field.LAT_LNG
                 )
                 val request = FetchPlaceRequest.newInstance(poi.placeId, placeFields)
                 placesClient.fetchPlace(request)
                     .addOnSuccessListener { response ->
-                        selectedPlace = response.place // 성공 시 선택된 장소 정보 업데이트
-                        scope.launch { sheetState.show() } // 바텀시트 열기
+                        selectedPlace = response.place
+                        scope.launch { sheetState.show() }
                     }
                     .addOnFailureListener { exception ->
                         Log.e("MapScreen", "Place not found.", exception)
                     }
-            },
-        ) {
-            // 지도 위에 마커 등 다른 Composable을 추가할 수 있는 공간입니다.
-        }
+            }
+        )
 
-        // 검색창 Composable
+        // ------------------ 검색창 ------------------
         SearchBar(
             modifier = Modifier
-                .align(Alignment.TopCenter) // 화면 상단 중앙에 배치
-                .padding(top = 8.dp, start = 8.dp, end = 8.dp, bottom = 8.dp ),
-            query = searchQuery, // 검색어 State와 바인딩
-            onQueryChange = { searchQuery = it }, // 검색어가 변경될 때마다 State를 업데이트합니다.
-            onSearch = { // 키보드에서 검색 액션(엔터 등)을 실행했을 때 API를 호출합니다.
-                doSearch(
-                    query = searchQuery,
+                .align(Alignment.TopCenter)
+                .padding(8.dp),
+            query = searchQuery,
+            onQueryChange = { searchQuery = it },
+            // 항상 최신 자동완성(연관검색) fetch + 상세 조회 → 바텀시트
+            onSearch = {
+                searchWithDetailInfo(
+                    searchQuery = searchQuery,
                     googleCameraPositionState = googleCameraPositionState,
                     placesClient = placesClient,
-                    onResult = { results -> searchResults = results }
+                    scope = scope,
+                    onResult = { place ->
+                        selectedPlace = place
+                        searchQuery = ""
+                        searchResults = emptyList()
+                        isSearchActive = false
+                        scope.launch { sheetState.show() }
+                    },
+                    moveCamera = { latLng ->
+                        scope.launch {
+                            googleCameraPositionState.animate(
+                                update = CameraUpdateFactory.newLatLngZoom(latLng, 15f),
+                                durationMs = 1000
+                            )
+                        }
+                    },
+                    onNoResult = {
+                        // 토스트, 스낵바 등 안내 코드 (예: "검색 결과 없음")
+                    }
                 )
             },
-            active = isSearchActive, // 검색창 활성 상태
-            onActiveChange = { // 활성 상태가 변경될 때 호출
+            active = isSearchActive,
+            onActiveChange = {
                 isSearchActive = it
-                if (!isSearchActive) {
+                if (!it) {
                     searchQuery = ""
-                    searchResults = emptyList() // 비활성화되면 검색 결과 초기화
+                    searchResults = emptyList()
                 }
             },
-            placeholder = { Text("장소 검색") }, // 검색창에 표시될 안내 텍스트
-            shape = RoundedCornerShape(12.dp), // 모서리가 둥근 사각형 모양
-            colors = SearchBarDefaults.colors(
-                containerColor = Color.White // 배경색을 흰색으로 설정
-            ),
-
-            // 앞에 아이콘
+            placeholder = { Text("장소 검색") },
+            shape = RoundedCornerShape(12.dp),
+            colors = SearchBarDefaults.colors(containerColor = Color.White),
             leadingIcon = {
                 if (isSearchActive) {
                     IconButton(onClick = {
-                        // ① 검색어 초기화
                         searchQuery = ""
                         searchResults = emptyList()
-                        // ② 검색창 닫기(비활성화, 즉 지도만 보이게)
                         isSearchActive = false
-                    }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "뒤로가기")
-                    }
+                    }) { Icon(Icons.Default.ArrowBack, contentDescription = "뒤로가기") }
                 } else {
-                    IconButton(onClick = {
-                        // ① 검색어 초기화
-//                        searchQuery = ""
-//                        searchResults = emptyList()
-//                        // ② 검색창 닫기(비활성화, 즉 지도만 보이게)
-//                        isSearchActive = false
-                    }) {
-                        Icon(Icons.Default.Search, contentDescription = "검색")
-                    }
+                    IconButton(onClick = { }) { Icon(Icons.Default.Search, contentDescription = "검색") }
                 }
             },
-            // 뒤에 아이콘
             trailingIcon = {
-                // query가 있을 때만 X버튼 노출
                 if (isSearchActive) {
                     IconButton(onClick = {
-                        // ① 검색어 조회
-                        doSearch(
-                            query = searchQuery,
+                        // 돋보기 아이콘도 항상 상세 fetch로 검색
+                        searchWithDetailInfo(
+                            searchQuery = searchQuery,
                             googleCameraPositionState = googleCameraPositionState,
                             placesClient = placesClient,
-                            onResult = { results -> searchResults = results }
+                            scope = scope,
+                            onResult = { place ->
+                                selectedPlace = place
+                                searchQuery = ""
+                                searchResults = emptyList()
+                                isSearchActive = false
+                                scope.launch { sheetState.show() }
+                            },
+                            moveCamera = { latLng ->
+                                scope.launch {
+                                    googleCameraPositionState.animate(
+                                        update = CameraUpdateFactory.newLatLngZoom(latLng, 15f),
+                                        durationMs = 1000
+                                    )
+                                }
+                            },
+                            onNoResult = {
+                                // 없음 안내 처리
+                            }
                         )
-                    }) {
-                        Icon(Icons.Default.Search, contentDescription = "검색")
-                    }
+                    }) { Icon(Icons.Default.Search, contentDescription = "검색") }
                 }
-            },
+            }
         ) {
-            // 검색 결과 목록을 표시하는 LazyColumn
+            // 자동완성(연관검색) 리스트 표시
             LazyColumn {
                 items(searchResults) { prediction ->
                     ListItem(
-                        headlineContent = { Text(prediction.getPrimaryText(null).toString()) }, // 장소 이름
-                        supportingContent = { Text(prediction.getSecondaryText(null).toString()) }, // 장소 주소
-                        modifier = Modifier.clickable { // 항목 클릭 시 이벤트
-                            isSearchActive = false // 검색창 비활성화
-                            searchQuery = ""       // 검색어 초기화
-                            searchResults = emptyList() // 검색 결과 초기화
+                        headlineContent = { Text(prediction.getPrimaryText(null).toString()) },
+                        supportingContent = { Text(prediction.getSecondaryText(null).toString()) },
+                        modifier = Modifier.clickable {
+                            // 반드시 placeId로 상세 fetch!
+                            fetchPlaceAndShowBottomSheet(
+                                prediction = prediction,
+                                placesClient = placesClient,
+                                onSuccess = { place ->
+                                    selectedPlace = place
+                                    searchQuery = ""
+                                    searchResults = emptyList()
+                                    isSearchActive = false
 
-                            // 클릭된 장소의 상세 정보(ID, 이름, 좌표)를 요청합니다.
-                            val placeFields = listOf(Place.Field.ID, Place.Field.NAME, Place.Field.LAT_LNG)
-                            val request = FetchPlaceRequest.newInstance(prediction.placeId, placeFields)
-
-                            placesClient.fetchPlace(request)
-                                .addOnSuccessListener { response ->
-                                    val place = response.place
-                                    place.latLng?.let { latLng ->
-                                        // 해당 장소로 지도를 부드럽게 이동시킵니다.
-                                        scope.launch {
-                                            googleCameraPositionState.animate(
-                                                update = CameraUpdateFactory.newLatLngZoom(latLng, 15f), // 15f 줌 레벨로 이동
-                                                durationMs = 1000 // 1초 동안 애니메이션
-                                            )
-                                        }
-                                    }
+                                    scope.launch { sheetState.show() }
                                 }
-                                .addOnFailureListener { exception ->
-                                    if (exception is ApiException && exception.statusCode == 9013) {
-                                        // Place ID 만료 안내 및 재검색 권유
-                                        Log.d("MapScreen","장소 정보가 만료됐습니다. 다시 검색해 주세요.")
-                                    } else {
-                                        Log.e("MapScreen", "Place fetch failed", exception)
-                                    }
-                                }
-
+                            )
                         }
                     )
                 }
             }
         }
 
-
-        // --- 바텀시트 표시 로직 ---
-        // 1. 지도에서 직접 위치를 선택했을 때
-        if (selectedLatLng != null) {
-            GooglePlaceBottomSheet(
-                latLng = selectedLatLng!!,
-                sheetState = sheetState,
-                onDismiss = {
-                    selectedLatLng = null
-                    scope.launch { sheetState.hide() }
-                }
-            )
-
-        }
-
-        // 2. POI 또는 검색 결과를 통해 장소를 선택했을 때
+        // 상세정보 바텀시트
         if (selectedPlace != null) {
             ModalBottomSheet(
                 sheetState = sheetState,
@@ -325,7 +281,79 @@ fun MapScreen(
     }
 }
 
-// ------ (1) doSearch 함수 완성 ------
+/**
+ * (1) 항상 검색어 기준 최신 자동완성 결과를 받아
+ * (2) 첫 번째 Prediction의 PlaceId로 FetchPlaceRequest를 호출해서 Place 상세 정보를 얻음
+ * (3) 성공시 지도 이동 & 바텀시트 오픈, 실패시 안내
+ */
+fun searchWithDetailInfo(
+    searchQuery: String,
+    googleCameraPositionState: CameraPositionState,
+    placesClient: PlacesClient,
+    scope: CoroutineScope,
+    onResult: (Place) -> Unit,
+    moveCamera: (com.google.android.gms.maps.model.LatLng) -> Unit,
+    onNoResult: (() -> Unit)? = null
+) {
+    doSearch(
+        query = searchQuery,
+        googleCameraPositionState = googleCameraPositionState,
+        placesClient = placesClient,
+        onResult = { predictions ->
+            val firstPrediction = predictions.firstOrNull()
+            if (firstPrediction != null) {
+                // 반드시 placeId로 상세 조회해야 모든 정보 올라옴!
+                fetchPlaceAndShowBottomSheet(
+                    prediction = firstPrediction,
+                    placesClient = placesClient,
+                    onSuccess = { place ->
+                        place.latLng?.let { moveCamera(it) }
+                        onResult(place)
+                    }
+                )
+            } else {
+                onNoResult?.invoke()
+            }
+        }
+    )
+}
+
+/**
+ * 자동완성 Prediction 객체(placeId)로 실제 Place 상세정보를 Fetch해서 결과 콜백
+ */
+fun fetchPlaceAndShowBottomSheet(
+    prediction: AutocompletePrediction,
+    placesClient: PlacesClient,
+    onSuccess: (Place) -> Unit,
+    onError: ((Exception) -> Unit)? = null
+) {
+    // 필요한 필드를 모두 명시해야 상세 데이터가 올라옴!
+    val placeFields = listOf(
+        Place.Field.ID,
+        Place.Field.NAME,
+        Place.Field.ADDRESS,
+        Place.Field.PHONE_NUMBER,
+        Place.Field.RATING,
+        Place.Field.WEBSITE_URI,
+        Place.Field.USER_RATINGS_TOTAL,
+        Place.Field.TYPES,
+        Place.Field.PHOTO_METADATAS,
+        Place.Field.LAT_LNG
+    )
+    val request = FetchPlaceRequest.newInstance(prediction.placeId, placeFields)
+    placesClient.fetchPlace(request)
+        .addOnSuccessListener { response ->
+            val place = response.place
+            onSuccess(place)
+        }
+        .addOnFailureListener { ex ->
+            onError?.invoke(ex)
+        }
+}
+
+/**
+ * 기본 자동완성 API 호출(연관검색)
+ */
 fun doSearch(
     query: String,
     googleCameraPositionState: CameraPositionState,
@@ -348,15 +376,7 @@ fun doSearch(
         .setLocationBias(bounds)
         .setQuery(query)
         .build()
-
-    Log.d("MapScreen", "Query: $query")
     placesClient.findAutocompletePredictions(request)
-        .addOnSuccessListener { response ->
-            onResult(response.autocompletePredictions)
-        }
-        .addOnFailureListener { exception ->
-            Log.e("MapScreen", "Autocomplete prediction failed", exception)
-            onError(exception)
-        }
+        .addOnSuccessListener { response -> onResult(response.autocompletePredictions) }
+        .addOnFailureListener { exception -> onError(exception) }
 }
-

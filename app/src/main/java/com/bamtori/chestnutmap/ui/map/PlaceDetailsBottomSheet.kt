@@ -74,19 +74,22 @@ fun PlaceDetailsBottomSheet(place: Place?, placesClient: PlacesClient) {
 
         Row(verticalAlignment = Alignment.CenterVertically) {
             // 평점
-            Text(
-                text = place.rating?.toString() ?: "N/A",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Icon(
-                imageVector = Icons.Default.Star,
-                contentDescription = "Rating",
-                tint = Color(0xFFFFC700),
-                modifier = Modifier
-                    .padding(start = 4.dp)
-                    .size(16.dp)
-            )
+            if (place.rating != null) {
+                Text(
+                    text = place.rating.toString(),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Icon(
+                    imageVector = Icons.Default.Star,
+                    contentDescription = "Rating",
+                    tint = Color(0xFFFFC700),
+                    modifier = Modifier
+                        .padding(start = 4.dp)
+                        .size(16.dp)
+                )
+            }
+
             // 리뷰 개수
             // TODO: Place.Field.USER_RATINGS_TOTAL을 요청하여 실제 리뷰 개수를 표시해야 합니다.
             val reviewsCount = place.userRatingsTotal
