@@ -28,7 +28,7 @@ android {
 
     defaultConfig {
         applicationId = "com.bamtori.chestnutmap"
-        minSdk = 24
+        minSdk = 26
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
@@ -134,6 +134,10 @@ dependencies {
     implementation("androidx.media3:media3-common-ktx:1.7.1")
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
+
+    // 캘린더
+    implementation("com.kizitonwose.calendar:compose:2.8.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.4.0")
 
     // 테스트
     testImplementation("junit:junit:4.13.2")
