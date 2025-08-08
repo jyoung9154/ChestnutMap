@@ -7,14 +7,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowLeft
@@ -32,8 +32,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -46,6 +49,7 @@ import com.kizitonwose.calendar.core.daysOfWeek
 import java.time.DayOfWeek
 import java.time.YearMonth
 import java.time.format.TextStyle
+import java.time.temporal.WeekFields
 import java.util.Locale
 import kotlinx.coroutines.launch
 
@@ -73,20 +77,44 @@ fun CalendarScreen(
 
     val selectedDate by calendarViewModel.selectedDate.collectAsState()
     val events by calendarViewModel.events.collectAsState()
-    val eventsForSelectedDate = remember(selectedDate, events) {
-        selectedDate?.let { date ->
-            events.filter { it.date == date }
-        } ?: emptyList()
+
+    // 화면 높이 계산 (시스템 UI 요소들 제외)
+    val configuration = LocalConfiguration.current
+    val density = LocalDensity.current
+    val screenHeight = configuration.screenHeightDp.dp
+
+    // 상태바와 네비게이션바 높이 계산
+    val statusBarHeight = with(density) {
+        WindowInsets.statusBars.getTop(density).toDp()
+    }
+    val navigationBarHeight = with(density) {
+        WindowInsets.navigationBars.getBottom(density).toDp()
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
+    // 헤더와 요일 헤더의 높이 (고정값)
+    val headerHeight = 56.dp // 월/연도 헤더
+    val dayOfWeekHeaderHeight = 40.dp // 요일 헤더
+    val fixedElementsHeight = headerHeight + dayOfWeekHeaderHeight + 70.dp // 커스텀 네비바 높이 추가
 
+    // 캘린더에서 사용할 수 있는 높이 (시스템 UI 요소들과 고정 요소들 제외)
+    val availableCalendarHeight = screenHeight - statusBarHeight - navigationBarHeight - fixedElementsHeight
+
+    // 현재 달의 주 개수 계산
+    val weeksInMonth = remember(visibleMonth) {
+        calculateWeeksInMonth(visibleMonth)
+    }
+
+    // 각 행(주)의 높이 계산
+    val rowHeight = availableCalendarHeight / weeksInMonth
+
+    Column(
+        modifier = Modifier.fillMaxSize()
     ) {
         // 캘린더 헤더 (월/연도 및 이전/다음 달 버튼)
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(headerHeight),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center
         ) {
@@ -113,7 +141,12 @@ fun CalendarScreen(
         }
 
         // 요일 헤더
-        Row(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(dayOfWeekHeaderHeight),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             for (dayOfWeek in daysOfWeek) {
                 Text(
                     modifier = Modifier.weight(1f),
@@ -128,34 +161,28 @@ fun CalendarScreen(
             }
         }
 
-        // 월별 캘린더
-        Box(modifier = Modifier
-//            .weight(20f) // 남는 공간 모두 사용
-//            .background(Color.Red)
-//            .fillMaxWidth() // 가로로도 꽉!
-            ) {
+        // 월별 캘린더 - 남은 공간을 모두 차지
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(availableCalendarHeight) // 시스템 UI 제외한 실제 사용 가능한 높이
+        ) {
             HorizontalCalendar(
                 state = state,
                 dayContent = { day ->
+                    val hasEvent = remember(day.date, events) {
+                        events.any { it.date == day.date }
+                    }
                     DayCell(
                         day = day,
                         isSelected = selectedDate == day.date,
-                        hasEvent = events.any { it.date == day.date }
+                        cellHeight = rowHeight, // 계산된 행 높이 전달
+                        hasEvent = hasEvent
                     ) {
                         calendarViewModel.onDateSelected(day.date)
                     }
                 }
             )
-        }
-
-
-//        Spacer(modifier = Modifier.height(16.dp))
-
-        // 선택된 날짜의 이벤트 목록
-        LazyColumn(modifier = Modifier.fillMaxSize()) {
-            items(eventsForSelectedDate) {
-                EventItem(event = it)
-            }
         }
     }
 }
@@ -165,26 +192,45 @@ fun DayCell(
     day: CalendarDay,
     isSelected: Boolean,
     hasEvent: Boolean,
+    cellHeight: Dp, // 높이 파라미터 추가
     onClick: () -> Unit
 ) {
     Box(
         modifier = Modifier
-            .aspectRatio(1f) // 정사각형 셀
-            .padding(4.dp)
-            .background(color = if (isSelected) Color.Gray.copy(alpha = 0.3f) else Color.Transparent)
-            .clickable(enabled = day.position == DayPosition.MonthDate, onClick = onClick),
-
-        contentAlignment = Alignment.Center
+            .fillMaxWidth()
+            .height(cellHeight) // 전달받은 높이 사용
+            .background(
+                color = if (isSelected)
+                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                else
+                    Color.Transparent
+            )
+            .clickable(enabled = day.position == DayPosition.MonthDate, onClick = onClick)
+            .padding(4.dp), // 여백 추가
+        contentAlignment = Alignment.TopCenter // 텍스트를 위쪽으로 정렬
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Top // 위쪽 정렬
+        ) {
             Text(
                 text = day.date.dayOfMonth.toString(),
-                color = if (day.position == DayPosition.MonthDate) MaterialTheme.colorScheme.onSurface else Color.Gray
+                color = when {
+                    day.position != DayPosition.MonthDate -> Color.Gray
+                    isSelected -> MaterialTheme.colorScheme.onPrimaryContainer
+                    day.date.dayOfWeek == DayOfWeek.SATURDAY -> Color.Blue
+                    day.date.dayOfWeek == DayOfWeek.SUNDAY -> Color.Red
+                    else -> MaterialTheme.colorScheme.onSurface
+                },
+                fontSize = 16.sp,
+                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
             )
+
             if (hasEvent) {
+                Spacer(modifier = Modifier.height(4.dp))
                 Box(
                     modifier = Modifier
-                        .size(4.dp)
+                        .size(6.dp)
                         .clip(CircleShape)
                         .background(MaterialTheme.colorScheme.error)
                 )
@@ -210,4 +256,20 @@ fun EventItem(event: Event) {
         Spacer(modifier = Modifier.size(8.dp))
         Text(text = event.title)
     }
+}
+
+/**
+ * 주어진 달의 주 개수를 계산하는 함수
+ */
+private fun calculateWeeksInMonth(yearMonth: YearMonth): Int {
+    val firstDayOfMonth = yearMonth.atDay(1)
+    val lastDayOfMonth = yearMonth.atEndOfMonth()
+
+    // 한국 기준으로 일요일을 첫 번째 요일로 설정 (기존 캘린더와 일치)
+    val weekFields = WeekFields.of(DayOfWeek.SUNDAY, 1)
+
+    val firstWeek = firstDayOfMonth.get(weekFields.weekOfMonth())
+    val lastWeek = lastDayOfMonth.get(weekFields.weekOfMonth())
+
+    return lastWeek - firstWeek + 1
 }
